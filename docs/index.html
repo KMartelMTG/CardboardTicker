@@ -111,6 +111,16 @@ tbody tr:focus-visible{outline:2px solid var(--gold); outline-offset:-2px}
 .up{color:var(--up)} .down{color:var(--down)}
 .finish{color:var(--paper-dim); font-size:13px}
 .empty{color:var(--paper-dim); padding:26px 4px}
+
+/* Card image preview */
+#hoverCard{
+  position:fixed; z-index:50; width:min(250px,42vw); border-radius:4.75% / 3.5%;
+  box-shadow:0 14px 34px rgba(0,0,0,.55); pointer-events:none; display:none;
+}
+.detail-flex{display:flex; gap:16px; align-items:flex-start}
+#cImg{width:170px; flex:none; border-radius:4.75% / 3.5%; box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.detail-flex figure{flex:1; min-width:0}
+@media (max-width:640px){ #cImg{width:110px} }
 @media (max-width:640px){ .hide-sm{display:none} th,td{padding:8px 6px} }
 @media (prefers-reduced-motion:no-preference){
   #results li button, .seg button, tbody tr{transition:background .12s ease}
@@ -141,10 +151,13 @@ tbody tr:focus-visible{outline:2px solid var(--gold); outline-offset:-2px}
         <span class="bigpx" id="cPrice"></span>
       </div>
       <div class="artbox">
-        <figure>
-          <div id="chart"></div>
-          <figcaption id="chartCap"></figcaption>
-        </figure>
+        <div class="detail-flex">
+          <img id="cImg" alt="" hidden>
+          <figure>
+            <div id="chart"></div>
+            <figcaption id="chartCap"></figcaption>
+          </figure>
+        </div>
       </div>
       <div class="statline" id="cStats"></div>
     </div>
@@ -177,8 +190,37 @@ tbody tr:focus-visible{outline:2px solid var(--gold); outline-offset:-2px}
   <p class="empty" id="moversEmpty" hidden></p>
 </div>
 
+<img id="hoverCard" alt="">
+
 <script>
 "use strict";
+/* ---------------- card image preview ---------------- */
+const CAN_HOVER = window.matchMedia("(hover: hover)").matches;
+const cardImgURL = id =>
+  `https://cards.scryfall.io/normal/front/${id[0]}/${id[1]}/${id}.jpg`;
+
+function movePreview(e){
+  const img = document.getElementById("hoverCard");
+  const w = img.offsetWidth || 250, h = img.offsetHeight || 349;
+  let x = e.clientX + 18, y = e.clientY + 14;
+  if(x + w > innerWidth - 8)  x = e.clientX - w - 18;
+  if(y + h > innerHeight - 8) y = innerHeight - h - 8;
+  img.style.left = Math.max(8, x) + "px";
+  img.style.top  = Math.max(8, y) + "px";
+}
+function hidePreview(){
+  const img = document.getElementById("hoverCard");
+  img.style.display = "none"; img.removeAttribute("src");
+}
+function attachPreview(el, id){
+  if(!CAN_HOVER) return;
+  el.addEventListener("mouseenter", e => {
+    const img = document.getElementById("hoverCard");
+    img.src = cardImgURL(id); img.style.display = "block"; movePreview(e);
+  });
+  el.addEventListener("mousemove", movePreview);
+  el.addEventListener("mouseleave", hidePreview);
+}
 // Data shapes (arrays keep the JSON small):
 // cards.json  rows: [id, name, set, cn, rarity, finish, price]
 // movers.json rows: [id, name, set, cn, finish, price, pct1, pct7, pct30, z]
@@ -249,6 +291,7 @@ async function runSearch(){
       + `<span class="set">${c[2].toUpperCase()} #${esc(c[3])} · ${c[5]}</span>`
       + `<span class="px">${fmt$(c[6])}</span>`;
     b.addEventListener("click", () => pick(c[0], c[1], c[2], c[3], c[5], c[6]));
+    attachPreview(b, c[0]);
     li.appendChild(b); list.appendChild(li);
   }
   list.style.display = hits.length ? "block" : "none";
@@ -259,7 +302,14 @@ function esc(s){ const d = document.createElement("span"); d.textContent = s; re
 
 /* ---------------- card detail ---------------- */
 async function pick(id, name, set, cn, finish, price){
+  hidePreview();
   $("results").style.display = "none";
+  const ci = $("cImg");
+  ci.hidden = true;
+  ci.onload = () => { ci.hidden = false; };
+  ci.onerror = () => { ci.hidden = true; };
+  ci.src = cardImgURL(id);
+  ci.alt = name;
   $("cName").textContent = name;
   $("cPrinting").textContent = `${set.toUpperCase()} #${cn}, ${finish}`;
   $("cPrice").textContent = fmt$(price);
@@ -367,11 +417,13 @@ function renderMovers(){
       + `<td class="num hide-sm">${r[9] == null ? "—" : (r[9] > 0 ? "+" : "") + r[9].toFixed(1)}</td>`;
     const open = () => pick(r[0], r[1], r[2], r[3], r[4], r[5]);
     tr.addEventListener("click", open);
+    attachPreview(tr, r[0]);
     tr.addEventListener("keydown", e => { if(e.key === "Enter") open(); });
     tb.appendChild(tr);
   }
 }
 
+document.getElementById("hoverCard").onerror = hidePreview;
 init();
 </script>
 </body>

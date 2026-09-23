@@ -2,7 +2,7 @@ name: Daily price snapshot
 
 on:
   schedule:
-    - cron: "15 6 * * *"   # 06:15 UTC daily, after Scryfall's bulk refresh
+    - cron: "0 12 * * *"   # 12:00 UTC = 7:00 AM Central, after Scryfall's ~09:00 UTC build
   workflow_dispatch: {}     # manual "Run workflow" button for the first seed
 
 permissions:

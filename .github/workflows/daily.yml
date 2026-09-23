@@ -1,0 +1,40 @@
+name: Daily price snapshot
+
+on:
+  schedule:
+    - cron: "15 6 * * *"   # 06:15 UTC daily, after Scryfall's bulk refresh
+  workflow_dispatch: {}     # manual "Run workflow" button for the first seed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Run daily pipeline
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python daily.py
+
+      - name: Commit history + site data
+        run: |
+          git config user.name "mtg-tracker-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data docs/data
+          git diff --cached --quiet || git commit -m "snapshot $(date -u +%F)"
+          git push

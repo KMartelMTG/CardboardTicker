@@ -112,6 +112,13 @@ tbody tr:focus-visible{outline:2px solid var(--gold); outline-offset:-2px}
 .finish{color:var(--paper-dim); font-size:13px}
 .empty{color:var(--paper-dim); padding:26px 4px}
 
+.back{
+  background:none; border:0; color:var(--gold); font:inherit; font-size:15px;
+  cursor:pointer; padding:0 2px; margin-bottom:10px;
+}
+.back:hover{text-decoration:underline}
+.back:focus-visible{outline:2px solid var(--gold); outline-offset:2px; border-radius:4px}
+
 /* Card image preview */
 #hoverCard{
   position:fixed; z-index:50; width:min(250px,42vw); border-radius:4.75% / 3.5%;
@@ -144,6 +151,7 @@ tbody tr:focus-visible{outline:2px solid var(--gold); outline-offset:-2px}
   </div>
 
   <section id="card" aria-live="polite">
+    <button id="backBtn" class="back" type="button">‹ Back to results</button>
     <div class="frame">
       <div class="namebar">
         <h2 id="cName"></h2>
@@ -301,9 +309,29 @@ async function runSearch(){
 function esc(s){ const d = document.createElement("span"); d.textContent = s; return d.innerHTML; }
 
 /* ---------------- card detail ---------------- */
+let inCard = false, fromSearch = false;
+
+function closeCard(){
+  $("card").style.display = "none";
+  inCard = false;
+  if(fromSearch && $("results").children.length){
+    $("results").style.display = "block";
+    $("q").focus({preventScroll: true});
+    document.querySelector(".search-panel").scrollIntoView({block: "start"});
+  }else{
+    document.querySelector(".movers-head").scrollIntoView({block: "start"});
+  }
+}
+
+window.addEventListener("popstate", () => { if(inCard) closeCard(); });
+
 async function pick(id, name, set, cn, finish, price){
   hidePreview();
-  $("results").style.display = "none";
+  const res = $("results");
+  fromSearch = res.style.display !== "none" && res.children.length > 0;
+  if(!inCard){ history.pushState({cbCard: 1}, ""); inCard = true; }
+  res.style.display = "none";
+  $("backBtn").textContent = fromSearch ? "‹ Back to results" : "‹ Back to movers";
   const ci = $("cImg");
   ci.hidden = true;
   ci.onload = () => { ci.hidden = false; };
@@ -424,6 +452,10 @@ function renderMovers(){
 }
 
 document.getElementById("hoverCard").onerror = hidePreview;
+$("backBtn").addEventListener("click", () => {
+  if(inCard && history.state && history.state.cbCard) history.back();
+  else closeCard();
+});
 init();
 </script>
 </body>

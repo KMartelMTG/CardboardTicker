@@ -32,7 +32,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import duckdb
-import ijson
+import gzip
 import polars as pl
 import requests
 
@@ -71,19 +71,37 @@ def fetch_today() -> pl.DataFrame:
 
     r = requests.get("https://api.scryfall.com/bulk-data", headers=HEADERS, timeout=60)
     r.raise_for_status()
-    uri = next(e["download_uri"] for e in r.json()["data"] if e["type"] == "default_cards")
+    entry = next(e for e in r.json()["data"] if e["type"] == "default_cards")
+    # Scryfall retired download_uri (July 2026); bulk files are now .jsonl.gz
+    uri = entry.get("jsonl_download_uri") or entry.get("download_uri")
+    if not uri:
+        raise RuntimeError(f"No download URI on bulk entry; keys: {sorted(entry)}")
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".bulk")
     print(f"Downloading {uri} ...")
     with requests.get(uri, headers=HEADERS, stream=True, timeout=120) as resp:
         resp.raise_for_status()
         for chunk in resp.iter_content(chunk_size=1 << 20):
             tmp.write(chunk)
     tmp.close()
+    try:
+        return parse_bulk(Path(tmp.name))
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
 
+
+def parse_bulk(path: Path) -> pl.DataFrame:
+    """Parse a Scryfall bulk file: gzipped JSONL (current) or plain JSON/JSONL."""
+    with open(path, "rb") as f:
+        is_gzip = f.read(2) == b"\x1f\x8b"
+    opener = gzip.open if is_gzip else open
     rows = []
-    with open(tmp.name, "rb") as f:
-        for card in ijson.items(f, "item"):
+    with opener(path, "rt", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip().rstrip(",")
+            if not line or line in ("[", "]"):
+                continue
+            card = json.loads(line)
             prices = card.get("prices") or {}
             base = {
                 "scryfall_id": card.get("id"),
@@ -97,7 +115,6 @@ def fetch_today() -> pl.DataFrame:
                 v = prices.get(field)
                 if v is not None:
                     rows.append({**base, "finish": finish, "price": float(v)})
-    Path(tmp.name).unlink(missing_ok=True)
     return pl.DataFrame(rows, schema_overrides={"price": pl.Float64})
 
 

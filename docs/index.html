@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cardboard Ticker — MTG price tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🃏</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --felt:#12271E; --felt-deep:#0C1B15; --line:#22402F;
+  --paper:#F1E9D4; --paper-dim:#D8CDAF; --ink:#221D12; --ink-soft:#5C5340;
+  --gold:#D9A441; --up:#5ECD84; --down:#E4604F;
+  --num:ui-sans-serif,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--felt); color:var(--paper);
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.5;
+  background-image:radial-gradient(ellipse 120% 60% at 50% -10%, #1B382A 0%, var(--felt) 60%);
+  min-height:100vh;
+}
+.wrap{max-width:980px; margin:0 auto; padding:28px 20px 80px}
+a{color:var(--gold)}
+
+/* Masthead */
+.masthead{display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 20px; margin-bottom:6px}
+.masthead h1{
+  font-family:"Fraunces",serif; font-style:italic; font-weight:500;
+  font-size:clamp(28px,5vw,40px); margin:0; color:var(--paper); letter-spacing:.01em;
+}
+.masthead h1 b{color:var(--gold); font-weight:700; font-style:normal}
+.meta{color:var(--paper-dim); font-size:14px}
+.tagline{color:var(--paper-dim); margin:0 0 26px; max-width:60ch}
+
+/* Search */
+.search-panel{position:relative}
+#q{
+  width:100%; padding:14px 18px; font-size:18px; border-radius:10px;
+  border:1px solid var(--line); background:var(--felt-deep); color:var(--paper);
+  font-family:inherit;
+}
+#q::placeholder{color:#6E8577}
+#q:focus{outline:2px solid var(--gold); outline-offset:1px; border-color:var(--gold)}
+#results{
+  list-style:none; margin:8px 0 0; padding:0; border-radius:10px; overflow:hidden;
+  border:1px solid var(--line); display:none; max-height:340px; overflow-y:auto;
+  background:var(--felt-deep);
+}
+#results li button{
+  display:flex; width:100%; gap:12px; align-items:baseline; text-align:left;
+  padding:10px 16px; background:none; border:0; border-bottom:1px solid var(--line);
+  color:var(--paper); font:inherit; cursor:pointer;
+}
+#results li:last-child button{border-bottom:0}
+#results li button:hover,#results li button:focus-visible{background:#183327; outline:none}
+#results .set{color:var(--paper-dim); font-size:13px; white-space:nowrap}
+#results .px{margin-left:auto; font-variant-numeric:tabular-nums; color:var(--gold)}
+.hint{color:#6E8577; font-size:14px; margin-top:8px}
+
+/* Card detail — styled like a card frame */
+#card{display:none; margin-top:26px}
+.frame{
+  background:var(--paper); color:var(--ink); border-radius:14px;
+  border:1px solid #B7A87E;
+  box-shadow:0 1px 0 #B7A87E inset, 0 10px 30px rgba(0,0,0,.35);
+  padding:10px;
+}
+.namebar{
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 14px;
+  background:linear-gradient(#FBF6E6,#EFE5C9); border:1px solid #C6B78D;
+  border-radius:8px; padding:8px 14px;
+}
+.namebar h2{font-family:"Fraunces",serif; font-weight:700; font-size:22px; margin:0}
+.namebar .printing{color:var(--ink-soft); font-size:14px}
+.namebar .bigpx{margin-left:auto; font-size:22px; font-variant-numeric:tabular-nums; font-weight:700}
+.artbox{border:1px solid #C6B78D; border-radius:8px; margin-top:8px; padding:14px 10px 6px; background:#FAF4E2}
+.statline{display:flex; gap:22px; flex-wrap:wrap; padding:10px 14px 4px; font-size:15px}
+.statline span{color:var(--ink-soft)}
+.statline b{font-variant-numeric:tabular-nums; font-weight:600}
+.pos{color:#177A43} .neg{color:#B3392C}
+figure{margin:0}
+figcaption{color:var(--ink-soft); font-size:13px; padding:4px 6px 2px}
+
+/* Movers */
+.movers-head{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:44px 0 14px}
+.movers-head h2{font-family:"Fraunces",serif; font-weight:700; font-size:24px; margin:0 auto 0 0}
+.seg{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+.seg button{
+  background:var(--felt-deep); color:var(--paper-dim); border:0; padding:7px 14px;
+  font:inherit; font-size:14px; cursor:pointer;
+}
+.seg button[aria-pressed="true"]{background:var(--gold); color:var(--ink); font-weight:600}
+.seg button:focus-visible{outline:2px solid var(--gold); outline-offset:-2px}
+label.minp{display:flex; align-items:center; gap:6px; font-size:14px; color:var(--paper-dim)}
+label.minp input{
+  width:76px; padding:6px 8px; border-radius:8px; border:1px solid var(--line);
+  background:var(--felt-deep); color:var(--paper); font:inherit; font-size:14px;
+}
+table{width:100%; border-collapse:collapse; font-size:15px}
+th,td{padding:9px 10px; text-align:left; border-bottom:1px solid var(--line)}
+th{color:var(--paper-dim); font-weight:500; font-size:13px}
+td.num,th.num{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--num)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#183327}
+tbody tr:focus-visible{outline:2px solid var(--gold); outline-offset:-2px}
+.up{color:var(--up)} .down{color:var(--down)}
+.finish{color:var(--paper-dim); font-size:13px}
+.empty{color:var(--paper-dim); padding:26px 4px}
+@media (max-width:640px){ .hide-sm{display:none} th,td{padding:8px 6px} }
+@media (prefers-reduced-motion:no-preference){
+  #results li button, .seg button, tbody tr{transition:background .12s ease}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <h1>The <b>Cardboard</b> Ticker</h1>
+    <span class="meta" id="meta">loading…</span>
+  </header>
+  <p class="tagline">Daily Scryfall market prices for every Magic printing.
+  Search any card, or scan what moved overnight.</p>
+
+  <div class="search-panel">
+    <input id="q" type="search" placeholder="Search any card — Rhystic Study, Sheoldred, Dockside…"
+           autocomplete="off" aria-label="Search cards">
+    <ul id="results"></ul>
+    <p class="hint" id="searchHint"></p>
+  </div>
+
+  <section id="card" aria-live="polite">
+    <div class="frame">
+      <div class="namebar">
+        <h2 id="cName"></h2>
+        <span class="printing" id="cPrinting"></span>
+        <span class="bigpx" id="cPrice"></span>
+      </div>
+      <div class="artbox">
+        <figure>
+          <div id="chart"></div>
+          <figcaption id="chartCap"></figcaption>
+        </figure>
+      </div>
+      <div class="statline" id="cStats"></div>
+    </div>
+  </section>
+
+  <div class="movers-head">
+    <h2>Movers</h2>
+    <div class="seg" role="group" aria-label="Window" id="segWin">
+      <button data-w="6" aria-pressed="true">1 day</button>
+      <button data-w="7" aria-pressed="false">7 days</button>
+      <button data-w="8" aria-pressed="false">30 days</button>
+    </div>
+    <div class="seg" role="group" aria-label="Direction" id="segDir">
+      <button data-d="up" aria-pressed="true">Up</button>
+      <button data-d="down" aria-pressed="false">Down</button>
+    </div>
+    <label class="minp">Min $
+      <input id="minPrice" type="number" value="1" min="0" step="0.5">
+    </label>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Card</th><th class="hide-sm">Printing</th>
+      <th class="num">Price</th><th class="num">1d</th>
+      <th class="num hide-sm">7d</th><th class="num hide-sm">30d</th>
+      <th class="num hide-sm">z</th>
+    </tr></thead>
+    <tbody id="moversBody"></tbody>
+  </table>
+  <p class="empty" id="moversEmpty" hidden></p>
+</div>
+
+<script>
+"use strict";
+// Data shapes (arrays keep the JSON small):
+// cards.json  rows: [id, name, set, cn, rarity, finish, price]
+// movers.json rows: [id, name, set, cn, finish, price, pct1, pct7, pct30, z]
+const D = "data/";
+let META = null, MOVERS = [], CARDS = null;
+const shardCache = new Map();
+const $ = id => document.getElementById(id);
+const fmt$ = n => "$" + n.toFixed(2);
+const fmtPct = p => p == null ? "—" : (p > 0 ? "+" : "") + p.toFixed(1) + "%";
+const pctClass = p => p == null ? "" : (p > 0 ? "up" : p < 0 ? "down" : "");
+
+async function getJSON(path){
+  const r = await fetch(D + path, {cache: "no-cache"});
+  if(!r.ok) throw new Error(path + " " + r.status);
+  return r.json();
+}
+
+async function init(){
+  try{
+    [META, MOVERS] = await Promise.all([getJSON("meta.json"), getJSON("movers.json")]);
+    const d = new Date(META.updated + "T00:00:00Z");
+    const nice = d.toLocaleDateString(undefined, {month:"short", day:"numeric", timeZone:"UTC"});
+    $("meta").textContent = `Updated ${nice} — day ${META.days_tracked} of tracking, `
+      + `${META.printings.toLocaleString()} printings`;
+    renderMovers();
+  }catch(e){
+    $("meta").textContent = "No data yet";
+    $("moversEmpty").hidden = false;
+    $("moversEmpty").textContent =
+      "No price data published yet. Run the daily workflow once, then refresh.";
+  }
+}
+
+/* ---------------- search ---------------- */
+let tHandle = null;
+$("q").addEventListener("input", () => {
+  clearTimeout(tHandle);
+  tHandle = setTimeout(runSearch, 180);
+});
+
+async function ensureCards(){
+  if(CARDS) return;
+  $("searchHint").textContent = "Loading card index…";
+  CARDS = await getJSON("cards.json");
+  $("searchHint").textContent = "";
+}
+
+async function runSearch(){
+  const q = $("q").value.trim().toLowerCase();
+  const list = $("results");
+  if(q.length < 2){ list.style.display = "none"; list.innerHTML = ""; return; }
+  try{ await ensureCards(); }
+  catch(e){ $("searchHint").textContent = "Card index not published yet."; return; }
+
+  const starts = [], contains = [];
+  for(const c of CARDS){
+    const n = c[1].toLowerCase();
+    if(n.startsWith(q)) starts.push(c);
+    else if(n.includes(q)) contains.push(c);
+    if(starts.length > 120) break;
+  }
+  const hits = starts.concat(contains).slice(0, 60);
+  list.innerHTML = "";
+  for(const c of hits){
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.innerHTML = `<span>${esc(c[1])}</span>`
+      + `<span class="set">${c[2].toUpperCase()} #${esc(c[3])} · ${c[5]}</span>`
+      + `<span class="px">${fmt$(c[6])}</span>`;
+    b.addEventListener("click", () => pick(c[0], c[1], c[2], c[3], c[5], c[6]));
+    li.appendChild(b); list.appendChild(li);
+  }
+  list.style.display = hits.length ? "block" : "none";
+  $("searchHint").textContent = hits.length ? "" : "No matches.";
+}
+
+function esc(s){ const d = document.createElement("span"); d.textContent = s; return d.innerHTML; }
+
+/* ---------------- card detail ---------------- */
+async function pick(id, name, set, cn, finish, price){
+  $("results").style.display = "none";
+  $("cName").textContent = name;
+  $("cPrinting").textContent = `${set.toUpperCase()} #${cn}, ${finish}`;
+  $("cPrice").textContent = fmt$(price);
+
+  const m = MOVERS.find(r => r[0] === id && r[4] === finish);
+  const stats = $("cStats");
+  stats.innerHTML = "";
+  const pairs = m ? [["1 day", m[6]], ["7 days", m[7]], ["30 days", m[8]]] : [];
+  for(const [label, val] of pairs){
+    const el = document.createElement("div");
+    el.innerHTML = `<span>${label}</span> <b class="${pctClass(val)}">${fmtPct(val)}</b>`;
+    stats.appendChild(el);
+  }
+  if(m && m[9] != null){
+    const el = document.createElement("div");
+    el.innerHTML = `<span>z-score</span> <b>${m[9] > 0 ? "+" : ""}${m[9].toFixed(1)}</b>`;
+    stats.appendChild(el);
+  }
+
+  let series = [];
+  try{
+    const prefix = id.slice(0, 2);
+    if(!shardCache.has(prefix)) shardCache.set(prefix, await getJSON("history/" + prefix + ".json"));
+    series = shardCache.get(prefix)[id + "|" + finish] || [];
+  }catch(e){ /* shard missing on day one */ }
+  drawChart(series);
+  $("card").style.display = "block";
+  $("card").scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+
+function drawChart(series){
+  const box = $("chart"), cap = $("chartCap");
+  if(series.length < 2){
+    box.innerHTML = "";
+    cap.textContent = series.length === 1
+      ? `One snapshot so far (${series[0][0]}) — the line starts tomorrow.`
+      : "No history captured for this printing yet.";
+    return;
+  }
+  const W = 900, H = 240, padL = 54, padR = 14, padT = 14, padB = 28;
+  const xs = series.map((_, i) => i), ys = series.map(p => p[1]);
+  let lo = Math.min(...ys), hi = Math.max(...ys);
+  if(hi - lo < 0.01){ hi += 0.05; lo = Math.max(0, lo - 0.05); }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad; lo = Math.max(0, lo);
+  const X = i => padL + (W - padL - padR) * (i / (xs.length - 1));
+  const Y = v => padT + (H - padT - padB) * (1 - (v - lo) / (hi - lo));
+  const pts = series.map((p, i) => `${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  const area = `${padL},${(H - padB)} ${pts} ${X(xs.length - 1).toFixed(1)},${H - padB}`;
+  const gridY = [lo + (hi - lo) * 0.25, lo + (hi - lo) * 0.5, lo + (hi - lo) * 0.75];
+  const last = series[series.length - 1];
+  box.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price history" style="width:100%;height:auto;display:block">
+    ${gridY.map(v => `<line x1="${padL}" x2="${W - padR}" y1="${Y(v)}" y2="${Y(v)}"
+        stroke="#DDD2B2" stroke-dasharray="3 5"/>`).join("")}
+    <polygon points="${area}" fill="#D9A441" opacity="0.16"/>
+    <polyline points="${pts}" fill="none" stroke="#B07E1F" stroke-width="2.5"
+        stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${X(xs.length - 1)}" cy="${Y(last[1])}" r="4.5" fill="#B07E1F"/>
+    <text x="${padL - 8}" y="${Y(hi - pad) + 4}" text-anchor="end" font-size="13" fill="#5C5340">${fmt$(hi - pad)}</text>
+    <text x="${padL - 8}" y="${Y(lo + pad) + 4}" text-anchor="end" font-size="13" fill="#5C5340">${fmt$(lo + pad)}</text>
+    <text x="${padL}" y="${H - 8}" font-size="13" fill="#5C5340">${series[0][0]}</text>
+    <text x="${W - padR}" y="${H - 8}" text-anchor="end" font-size="13" fill="#5C5340">${last[0]}</text>
+  </svg>`;
+  cap.textContent = `${series.length} daily snapshots, ${series[0][0]} to ${last[0]}`;
+}
+
+/* ---------------- movers ---------------- */
+let winIdx = 6, dir = "up";
+$("segWin").addEventListener("click", e => seg(e, "segWin", b => winIdx = +b.dataset.w));
+$("segDir").addEventListener("click", e => seg(e, "segDir", b => dir = b.dataset.d));
+$("minPrice").addEventListener("input", renderMovers);
+
+function seg(e, groupId, apply){
+  const b = e.target.closest("button"); if(!b) return;
+  document.querySelectorAll(`#${groupId} button`).forEach(x => x.setAttribute("aria-pressed", "false"));
+  b.setAttribute("aria-pressed", "true");
+  apply(b); renderMovers();
+}
+
+function renderMovers(){
+  const minP = parseFloat($("minPrice").value) || 0;
+  const rows = MOVERS
+    .filter(r => r[5] >= minP && r[winIdx] != null && (dir === "up" ? r[winIdx] > 0 : r[winIdx] < 0))
+    .sort((a, b) => dir === "up" ? b[winIdx] - a[winIdx] : a[winIdx] - b[winIdx])
+    .slice(0, 100);
+  const tb = $("moversBody");
+  tb.innerHTML = "";
+  $("moversEmpty").hidden = rows.length > 0;
+  if(!rows.length){
+    $("moversEmpty").textContent = META && META.days_tracked < 2
+      ? "History starts today — movement appears after the second daily snapshot."
+      : "Nothing crossed the thresholds for this filter.";
+    return;
+  }
+  for(const r of rows){
+    const tr = document.createElement("tr");
+    tr.tabIndex = 0;
+    tr.innerHTML =
+      `<td>${esc(r[1])}</td>`
+      + `<td class="hide-sm"><span class="finish">${r[2].toUpperCase()} #${esc(r[3])}, ${r[4]}</span></td>`
+      + `<td class="num">${fmt$(r[5])}</td>`
+      + `<td class="num ${pctClass(r[6])}">${fmtPct(r[6])}</td>`
+      + `<td class="num hide-sm ${pctClass(r[7])}">${fmtPct(r[7])}</td>`
+      + `<td class="num hide-sm ${pctClass(r[8])}">${fmtPct(r[8])}</td>`
+      + `<td class="num hide-sm">${r[9] == null ? "—" : (r[9] > 0 ? "+" : "") + r[9].toFixed(1)}</td>`;
+    const open = () => pick(r[0], r[1], r[2], r[3], r[4], r[5]);
+    tr.addEventListener("click", open);
+    tr.addEventListener("keydown", e => { if(e.key === "Enter") open(); });
+    tb.appendChild(tr);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
